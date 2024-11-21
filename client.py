@@ -39,6 +39,11 @@ def get_public_key_from_pka(identity):
         return tuple(map(int, response.split()))
 
 
+def send_message(mySocket, message):
+    # Send the message followed by a newline or other delimiter
+    mySocket.send(message.encode() + b"\n")  # Send a newline to signify the end
+
+
 def authenticate(mySocket):
     while True:
         username_prompt = mySocket.recv(1024).decode()
@@ -56,11 +61,14 @@ def authenticate(mySocket):
 
         if response == "Authentication successful.":
             break
+        elif response == "Authentication failed. Please try again.":
+            print("Authentication failed. Please try again.")
+            break  # Exit the loop after a failed attempt
 
 
 def main():
     server_host = "127.0.0.1"
-    server_port = 5000
+    server_port = 7000
 
     # Connect to server
     client_socket = socket.socket()
@@ -94,8 +102,8 @@ def main():
             logging.info(f"Input received: {message}")
             finalEncryptedMessage = library.encrypt(message)
             client_socket.send(finalEncryptedMessage.encode())
+            print("Encrypted message = " + finalEncryptedMessage)
             library.sending()
-            print("\nEncrypted message = " + finalEncryptedMessage)
 
             data = client_socket.recv(1024).decode()
             print("Received from server = " + data)
@@ -104,7 +112,6 @@ def main():
             if not data:
                 break
             print("Decrypted Message = " + str(decryptedMessage))
-            print("\n")
         else:
             logging.error("Invalid input, please try again.")
 
