@@ -52,6 +52,7 @@ def receive_message(conn):
     data = conn.recv(1024).decode()
     if not data:
         return None
+    time.sleep(3)
     print(f"Received from client: {data}")
     decrypted_message = library.decrypt(data)
     print(f"Decrypted Message: {decrypted_message}")
@@ -83,7 +84,7 @@ def send_message_with_key_check(conn):
                     logging.error("Invalid input, please try again.\n")
 
 
-valid_credentials = {"root": "rooot", "riyanda": "tc22"}
+valid_credentials = {"root": "root", "riyanda": "tc22"}
 
 
 def validate_credentials(username, password):
@@ -106,7 +107,7 @@ def main():
     threading.Thread(target=update_des_key_periodically, daemon=True).start()
 
     host = "127.0.0.1"
-    port = 5000
+    port = 7000
 
     server_socket = socket.socket()
     server_socket.bind((host, port))
@@ -141,6 +142,9 @@ def main():
         else:
             logging.warning("Authentication failed.")
             conn.send("Authentication failed. Please try again.".encode())
+            # Close the connection properly when authentication fails
+            conn.close()
+            return  # Exit after authentication failure
 
     # Now using send_message_with_key_check to handle sending encrypted messages
     send_message_with_key_check(conn)
