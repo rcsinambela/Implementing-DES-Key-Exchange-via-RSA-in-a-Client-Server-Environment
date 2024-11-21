@@ -2,27 +2,12 @@ import socket
 import library
 import logging
 import time
-import threading
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 logging.info("Client has started")
-
-
-def listen_for_updates(client_socket):
-    while True:
-        try:
-            update = client_socket.recv(1024).decode()
-            if update.startswith("KEY_UPDATE"):
-                _, new_key = update.split()
-                print(
-                    f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Received DES Key update: {new_key}"
-                )
-        except Exception as e:
-            print(f"[ERROR] Failed to listen for updates: {e}")
-            break
 
 
 def validate_input(user_input):
@@ -88,20 +73,16 @@ def main():
     des_key = int("1001100111", 2)
     encrypted_des_key = rsa_encrypt(des_key, server_public_key)
     client_socket.send(str(encrypted_des_key).encode())
-    print("[DEBUG] Encrypted DES Key sent to server.")
 
     # Wait for server acknowledgment (optional)
     ack = client_socket.recv(1024).decode()
     if ack != "ACK":
-        print(f"[DEBUG] Server response: {ack}")
         print("Handshake failed. Closing connection.")
         client_socket.close()
         return
 
-    # Start thread to listen for updates
-    threading.Thread(
-        target=lambda: listen_for_updates(client_socket), daemon=True
-    ).start()
+    # DES Key Debugging
+    print(f"Using DES Key: {bin(des_key)[2:]}")
 
     # Authenticate with server
     authenticate(client_socket)
