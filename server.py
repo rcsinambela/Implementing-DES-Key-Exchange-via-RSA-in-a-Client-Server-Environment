@@ -3,12 +3,15 @@ import library
 import logging
 import time
 import threading
+from threading import Lock
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 logging.info("Server has started")
+
+des_key_lock = Lock()
 
 
 # RSA Implementation
@@ -33,18 +36,54 @@ def get_public_key_from_pka(identity):
         return tuple(map(int, response.split()))
 
 
-def update_des_key_periodically(conn):
+def update_des_key_periodically():
     global des_key
     while True:
-        des_key = int(time.time()) % 1024  # Contoh regenerasi DES key
-        print(
-            f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] DES Key updated to: {bin(des_key)[2:]}"
-        )
-        conn.send(f"KEY_UPDATE {bin(des_key)[2:]}".encode())  # Kirim key baru ke client
-        time.sleep(60)  # Tunggu 60 detik sebelum memperbarui lagi
+        time.sleep(60)  # Wait 60 seconds before updating the key
+        with des_key_lock:
+            des_key = int(time.time()) % 1024  # Regenerate a new DES key
+            print(
+                f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] DES Key updated to: {bin(des_key)[2:]}"
+            )
 
 
-valid_credentials = {"daniel": "tc20", "riyanda": "tc22"}
+# Handle receiving and decrypting messages
+def receive_message(conn):
+    data = conn.recv(1024).decode()
+    if not data:
+        return None
+    print(f"Received from client: {data}")
+    decrypted_message = library.decrypt(data)
+    print(f"Decrypted Message: {decrypted_message}")
+    return decrypted_message
+
+
+# Inside the main server loop, ensure key change is delayed until after message transmission
+def send_message_with_key_check(conn):
+    while True:
+        decrypted_message = receive_message(conn)
+        if decrypted_message is None:
+            break  # Exit loop if client disconnects or sends nothing
+
+        with des_key_lock:  # Ensure key is not updated during message sending
+            """
+            Send message & encrypt the message
+            """
+            while True:
+                message = input("#server -> ")
+                if validate_input(message):
+                    logging.info(f"Input received: {message}")
+                    finalEncryptedMessage = library.encrypt(message)
+                    print("Encrypted message =", finalEncryptedMessage)
+
+                    library.sending()
+                    conn.send(finalEncryptedMessage.encode())
+                    break
+                else:
+                    logging.error("Invalid input, please try again.\n")
+
+
+valid_credentials = {"root": "rooot", "riyanda": "tc22"}
 
 
 def validate_credentials(username, password):
@@ -61,6 +100,10 @@ def validate_input(user_input):
 def main():
     global des_key
     des_key = 123  # Initial DES key
+
+    # Start DES key update thread
+    # Start DES key update thread
+    threading.Thread(target=update_des_key_periodically, daemon=True).start()
 
     host = "127.0.0.1"
     port = 5000
@@ -79,17 +122,9 @@ def main():
 
     # Receive DES key handshake
     encrypted_des_key = int(conn.recv(1024).decode())
-    if not encrypted_des_key:
-        print("[ERROR] No DES key received from client.")
-        conn.close()
-        return
     des_key = rsa_decrypt(encrypted_des_key, (413, 3233))  # Server's private key
     print(f"Handshake completed. Received DES Key: {bin(des_key)[2:]}")
     conn.send("ACK".encode())  # Send acknowledgment
-    print("[DEBUG] ACK sent to client after handshake.")
-
-    # Start DES key update thread
-    threading.Thread(target=update_des_key_periodically(conn), daemon=True).start()
 
     while True:
         conn.send("Enter your username: ".encode())
@@ -107,29 +142,8 @@ def main():
             logging.warning("Authentication failed.")
             conn.send("Authentication failed. Please try again.".encode())
 
-    while True:
-        data = conn.recv(1024).decode()
-        if not data:
-            break
-        print(f"Received from client: {data}")
-
-        decrypted_message = library.decrypt(data)
-        print(f"Decrypted Message: {decrypted_message}")
-        """
-        Send message & encrypt the message
-        """
-        while True:
-            message = input("#server -> ")
-            if validate_input(message):
-                logging.info(f"Input received: {message}")
-                finalEncryptedMessage = library.encrypt(message)
-                print("Encrypted message =", finalEncryptedMessage)
-
-                library.sending()
-                conn.send(finalEncryptedMessage.encode())
-                break
-            else:
-                logging.error("Invalid input, please try again.\n")
+    # Now using send_message_with_key_check to handle sending encrypted messages
+    send_message_with_key_check(conn)
 
     conn.close()
 
